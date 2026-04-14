@@ -1,0 +1,445 @@
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ポケさぽ</title>
+    
+    <!-- PWA用設定 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ポケさぽ">
+    
+    <!-- SVGアプリアイコン (Base64) -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExMiIgZmlsbD0iI2Y5NzMxNiIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iMTYwIiBmaWxsPSIjZmZmZmZmIi8+PHBhdGggZD0iTTk2IDI1NiBhIDE2MCAxNjAgMCAwIDEgMzIwIDAgWiIgZmlsbD0iI2VmNDQ0NCIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iNDAiIGZpbGw9IiM0NzU1NjkiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjI0IiBmaWxsPSIjZmZmZmZmIi8+PC9zdmc+">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExMiIgZmlsbD0iI2Y5NzMxNiIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iMTYwIiBmaWxsPSIjZmZmZmZmIi8+PHBhdGggZD0iTTk2IDI1NiBhIDE2MCAxNjAgMCAwIDEgMzIwIDAgWiIgZmlsbD0iI2VmNDQ0NCIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iNDAiIGZpbGw9IiM0NzU1NjkiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjI0IiBmaWxsPSIjZmZmZmZmIi8+PC9zdmc+">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (ブラウザ上でJSXをコンパイル) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* iOS Safariのセーフエリア（ノッチ対応）用のパディング */
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+          .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+          .safe-top { padding-top: env(safe-area-inset-top); }
+          .safe-bottom { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+        }
+        body { margin: 0; overscroll-behavior: none; }
+        .animate-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // --- アイコンコンポーネント (LucideのSVGを手動実装) ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const svgRef = useRef(null);
+            useEffect(() => {
+                if (svgRef.current) {
+                    lucide.createIcons({ icons: { [name]: lucide.icons[name] }, nameAttr: 'data-lucide', attrs: { class: className, width: size, height: size } });
+                }
+            }, [name, size, className]);
+            return <i ref={svgRef} data-lucide={name}></i>;
+        };
+
+        const apiKey = ""; // 実行環境から自動で提供されます
+
+        // --- 1. AI: パーティ提案機能 ---
+        async function generateIdealParty(berries, mealType) {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+          const berryList = berries.join('、');
+          const prompt = `あなたはポケモンスリープの熟練プレイヤーです。以下の条件に合わせた「理想のパーティ（5匹）」を考案してください。
+            【今週の条件】カビゴンの好みのきのみ: ${berryList} / 料理カテゴリ: ${mealType}
+            【考慮事項】手持ち状況は無視し、全ポケモンから最適な5匹を選択。きのみ得意と食材得意のバランス、ヒーラー等のスキル要員も考慮。
+            以下のJSON形式で出力してください。`;
+
+          const payload = {
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "OBJECT",
+                properties: {
+                  concept: { type: "STRING", description: "コンセプト(100文字)" },
+                  party: { type: "ARRAY", items: { type: "OBJECT", properties: { name: { type: "STRING" }, role: { type: "STRING" }, reason: { type: "STRING" } } } },
+                  targetMeals: { type: "ARRAY", items: { type: "STRING" } }
+                }
+              }
+            }
+          };
+
+          const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          if (!response.ok) throw new Error("API Error");
+          const result = await response.json();
+          return JSON.parse(result.candidates[0].content.parts[0].text);
+        }
+
+        // --- 2. AI: 複数個体の評価（厳選）機能 ---
+        async function evaluatePokemons(imagesData) {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+          const prompt = `複数のポケモンスリープのステータス画面画像です。【提供された画像の順番通りに】各ポケモンを鑑定しリスト化してください。
+            1. 種族名、性格、サブスキル(最大5)、食材を読取。 2. きのみ/食材/スキルの得意を判断。 3. 役割に対する性格・サブスキルの噛み合いを厳しく評価。 4. 総合評価をS,A,B,Cで判定。`;
+
+          const parts = [{ text: prompt }];
+          imagesData.forEach(base64Data => {
+            const mimeType = base64Data.match(/^data:(image\/[a-zA-Z+]+);base64,/)?.[1] || 'image/jpeg';
+            const base64String = base64Data.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+            parts.push({ inlineData: { mimeType: mimeType, data: base64String } });
+          });
+
+          const payload = {
+            contents: [{ role: "user", parts: parts }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "ARRAY", items: { type: "OBJECT", properties: {
+                    name: { type: "STRING" }, specialty: { type: "STRING" }, rank: { type: "STRING" }, score: { type: "INTEGER" },
+                    goodPoints: { type: "ARRAY", items: { type: "STRING" } }, badPoints: { type: "ARRAY", items: { type: "STRING" } }, conclusion: { type: "STRING" }
+                  } }
+              }
+            }
+          };
+
+          const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          if (!response.ok) throw new Error("API Error");
+          const result = await response.json();
+          return JSON.parse(result.candidates[0].content.parts[0].text);
+        }
+
+
+        function App() {
+          const [activeTab, setActiveTab] = useState('party'); 
+          
+          const [selectedField, setSelectedField] = useState('ワカクサ本島 (手動選択)');
+          const [selectedBerries, setSelectedBerries] = useState([]);
+          const [mealType, setMealType] = useState('カレー・シチュー');
+          const [isGeneratingParty, setIsGeneratingParty] = useState(false);
+          const [partyResult, setPartyResult] = useState(null);
+
+          const [selectedImages, setSelectedImages] = useState([]);
+          const [isEvaluating, setIsEvaluating] = useState(false);
+          const [evaluationResults, setEvaluationResults] = useState(null);
+          const [expandedResults, setExpandedResults] = useState(new Set()); 
+          const [threshold, setThreshold] = useState('A'); 
+          const fileInputRef = useRef(null);
+
+          const RANK_VALUES = { 'S': 4, 'A': 3, 'B': 2, 'C': 1 };
+
+          const ALL_BERRIES = [
+            { name: 'キー', type: 'ノーマル', color: 'bg-stone-400' }, { name: 'ヒメリ', type: 'ほのお', color: 'bg-red-500' },
+            { name: 'オレン', type: 'みず', color: 'bg-blue-500' }, { name: 'ウブ', type: 'でんき', color: 'bg-yellow-400' },
+            { name: 'ドリ', type: 'くさ', color: 'bg-green-500' }, { name: 'チーゴ', type: 'こおり', color: 'bg-cyan-300' },
+            { name: 'クラボ', type: 'かくとう', color: 'bg-orange-600' }, { name: 'カゴ', type: 'どく', color: 'bg-purple-600' },
+            { name: 'フィラ', type: 'じめん', color: 'bg-amber-600' }, { name: 'シーヤ', type: 'ひこう', color: 'bg-sky-400' },
+            { name: 'マゴ', type: 'エスパー', color: 'bg-pink-500' }, { name: 'ラム', type: 'むし', color: 'bg-lime-500' },
+            { name: 'オボン', type: 'いわ', color: 'bg-yellow-600' }, { name: 'ブリー', type: 'ゴースト', color: 'bg-indigo-600' },
+            { name: 'ヤチェ', type: 'ドラゴン', color: 'bg-indigo-400' }, { name: 'ウイ', type: 'あく', color: 'bg-slate-700' },
+            { name: 'ベリブ', type: 'はがね', color: 'bg-teal-600' }, { name: 'モモン', type: 'フェアリー', color: 'bg-pink-300' }
+          ];
+
+          const FIELDS = [
+            { name: 'ワカクサ本島 (手動選択)', berries: [] },
+            { name: 'シアンの砂浜', berries: ['オレン', 'モモン', 'シーヤ'] },
+            { name: 'トープ洞窟', berries: ['ヒメリ', 'オボン', 'フィラ'] },
+            { name: 'ウノハナ雪原', berries: ['チーゴ', 'ウイ', 'キー'] },
+            { name: 'ラピスラズリ湖畔', berries: ['ドリ', 'マゴ', 'クラボ'] },
+            { name: 'ゴールド旧発電所', berries: ['ウブ', 'ベリブ', 'ブリー'] }
+          ];
+
+          const handleFieldChange = (e) => {
+            const fieldName = e.target.value;
+            setSelectedField(fieldName);
+            const field = FIELDS.find(f => f.name === fieldName);
+            if (field && field.berries.length > 0) setSelectedBerries(field.berries);
+            else setSelectedBerries([]);
+          };
+
+          const toggleBerry = (berryName) => {
+            setSelectedField('ワカクサ本島 (手動選択)');
+            if (selectedBerries.includes(berryName)) setSelectedBerries(selectedBerries.filter(b => b !== berryName));
+            else if (selectedBerries.length < 3) setSelectedBerries([...selectedBerries, berryName]);
+          };
+
+          const handleGenerateParty = async () => {
+            if (selectedBerries.length === 0) return;
+            setIsGeneratingParty(true);
+            try {
+              const res = await generateIdealParty(selectedBerries, mealType);
+              setPartyResult(res);
+            } catch (e) { alert("生成に失敗しました"); } finally { setIsGeneratingParty(false); }
+          };
+
+          const handleImageChange = async (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+            const base64Promises = files.map(file => new Promise((resolve) => {
+                const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(file);
+            }));
+            const base64Images = await Promise.all(base64Promises);
+            setSelectedImages(prev => [...prev, ...base64Images]);
+            setEvaluationResults(null); setExpandedResults(new Set()); 
+          };
+
+          const handleRemoveImage = (indexToRemove) => {
+            setSelectedImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
+            setEvaluationResults(null); setExpandedResults(new Set());
+          };
+
+          const handleEvaluate = async () => {
+            if (selectedImages.length === 0) return;
+            setIsEvaluating(true); setExpandedResults(new Set()); 
+            try {
+              const res = await evaluatePokemons(selectedImages);
+              setEvaluationResults(res);
+            } catch (e) { alert("評価に失敗しました。枚数を減らして試してください。"); console.error(e); } 
+            finally { setIsEvaluating(false); }
+          };
+
+          const handleClearAll = () => {
+            setSelectedImages([]); setEvaluationResults(null); setExpandedResults(new Set());
+          };
+
+          const toggleResult = (idx) => {
+            setExpandedResults(prev => {
+              const newSet = new Set(prev);
+              if (newSet.has(idx)) newSet.delete(idx); else newSet.add(idx);
+              return newSet;
+            });
+          };
+
+          return (
+            <div className="h-screen w-full flex flex-col bg-slate-100 text-slate-800 font-sans sm:max-w-md sm:mx-auto sm:border-x sm:shadow-xl relative overflow-hidden">
+              <header className="bg-orange-500 text-white p-4 shadow-md z-10 safe-top">
+                <h1 className="text-xl font-bold text-center tracking-wider flex justify-center items-center gap-2">
+                  <Icon name="sparkles" size={20} /> ポケさぽ
+                </h1>
+              </header>
+
+              <main className="flex-1 overflow-y-auto pb-24 p-4 safe-bottom">
+                
+                {/* === タブ1: 理想パーティ提案 === */}
+                {activeTab === 'party' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                      <h2 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
+                        <Icon name="chef-hat" className="text-orange-500" /> 今週の条件を入力
+                      </h2>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-xs font-bold text-slate-500 mb-2 block">料理カテゴリ</label>
+                          <select value={mealType} onChange={(e) => setMealType(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-400 outline-none text-sm font-bold text-slate-700">
+                            <option value="カレー・シチュー">カレー・シチュー</option><option value="サラダ">サラダ</option><option value="デザート・ドリンク">デザート・ドリンク</option>
+                          </select>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100">
+                          <label className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1.5"><Icon name="map" size={14} /> リサーチフィールドから自動設定</label>
+                          <select value={selectedField} onChange={handleFieldChange} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-400 outline-none text-sm font-bold text-emerald-700">
+                            {FIELDS.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between items-end mb-2 mt-2">
+                            <label className="text-xs font-bold text-slate-500 block">好みのきのみ（最大3つ）</label>
+                            <span className="text-[10px] text-slate-400">タップで直接変更可能</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {ALL_BERRIES.map(berry => (
+                              <button key={berry.name} onClick={() => toggleBerry(berry.name)}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 border ${selectedBerries.includes(berry.name) ? 'bg-slate-800 text-white border-slate-800 shadow-sm' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                                <span className={`w-2.5 h-2.5 rounded-full ${berry.color}`}></span>{berry.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <button onClick={handleGenerateParty} disabled={isGeneratingParty || selectedBerries.length === 0}
+                          className="w-full mt-6 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-lg transition-colors shadow-lg shadow-orange-200 flex justify-center items-center gap-2 disabled:opacity-50">
+                          {isGeneratingParty ? <><Icon name="loader-2" className="animate-spin" size={20} /> AIが思考中...</> : "理想のパーティを生成"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {partyResult && (
+                      <div className="space-y-4 animate-in slide-in-from-bottom-4">
+                        <div className="bg-gradient-to-br from-orange-50 to-amber-50 p-5 rounded-2xl border border-orange-200 shadow-sm">
+                          <h3 className="font-bold text-orange-800 mb-2 text-lg">💡 編成コンセプト</h3>
+                          <p className="text-sm text-orange-900 leading-relaxed">{partyResult.concept}</p>
+                        </div>
+                        <div className="space-y-3">
+                          <h3 className="font-bold text-slate-700 ml-1">おすすめの5匹</h3>
+                          {partyResult.party.map((poke, idx) => (
+                            <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex gap-4 items-start">
+                              <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold flex-shrink-0">{idx + 1}</div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1"><span className="font-bold text-slate-800 text-lg">{poke.name}</span><span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full font-bold">{poke.role}</span></div>
+                                <p className="text-xs text-slate-500 leading-relaxed">{poke.reason}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                          <h3 className="font-bold text-slate-700 mb-2 text-sm">🍲 狙えるおすすめ料理</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {partyResult.targetMeals.map((meal, idx) => <span key={idx} className="px-3 py-1 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold">{meal}</span>)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* === タブ2: 個体評価 === */}
+                {activeTab === 'evaluate' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                     <div className="text-center space-y-2 mb-4">
+                      <h2 className="text-2xl font-bold text-slate-700">一括個体チェッカー</h2>
+                      <p className="text-sm text-slate-500">スクショを複数選択してまとめて鑑定</p>
+                    </div>
+
+                    {selectedImages.length > 0 && (
+                      <div className="flex gap-3 overflow-x-auto pb-4 px-1 snap-x">
+                        {selectedImages.map((img, idx) => (
+                          <div key={idx} className="relative w-28 h-48 flex-shrink-0 rounded-xl overflow-hidden border-2 border-orange-200 shadow-sm snap-start bg-slate-200">
+                            <img src={img} className="w-full h-full object-cover" />
+                            <button onClick={() => handleRemoveImage(idx)} disabled={isEvaluating} className="absolute top-1.5 right-1.5 p-1 bg-black/60 text-white rounded-full hover:bg-red-500 disabled:opacity-50"><Icon name="x" size={14} /></button>
+                            <div className="absolute bottom-0 left-0 w-full bg-black/50 text-white text-[10px] text-center py-1 font-bold">{idx + 1}匹目</div>
+                          </div>
+                        ))}
+                        {!isEvaluating && !evaluationResults && (
+                          <button onClick={() => fileInputRef.current?.click()} className="w-28 h-48 flex-shrink-0 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-2 text-slate-400 hover:bg-slate-50 hover:text-orange-500 snap-start">
+                            <Icon name="plus" size={24} /><span className="text-xs font-bold">追加</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedImages.length === 0 && (
+                      <div onClick={() => !isEvaluating && fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 bg-white hover:bg-slate-50 rounded-2xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer">
+                        <div className="w-16 h-16 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mb-2"><Icon name="camera" size={32} /></div>
+                        <span className="font-bold text-slate-600">画像をタップして選択</span>
+                        <span className="text-xs text-slate-400">複数枚まとめて選択できます</span>
+                      </div>
+                    )}
+
+                    <input type="file" multiple ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageChange} />
+
+                    {selectedImages.length > 0 && !evaluationResults && (
+                      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <div className="text-sm font-bold text-slate-600 flex items-center gap-2"><Icon name="archive-restore" size={16} /> 仕分けライン設定</div>
+                          <select value={threshold} onChange={(e) => setThreshold(e.target.value)} className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm font-bold text-orange-600">
+                            <option value="S">Sランク以上のみキープ</option><option value="A">Aランク以上をキープ</option><option value="B">Bランク以上をキープ</option>
+                          </select>
+                        </div>
+                        <div className="flex gap-3">
+                          <button onClick={handleClearAll} disabled={isEvaluating} className="w-1/3 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold disabled:opacity-70">クリア</button>
+                          <button onClick={handleEvaluate} disabled={isEvaluating} className="w-2/3 py-3 bg-orange-500 text-white rounded-xl font-bold shadow-md flex justify-center items-center gap-2 disabled:opacity-70">
+                            {isEvaluating ? <><Icon name="loader-2" className="animate-spin" size={18} /> 鑑定中...</> : `${selectedImages.length}匹を一気に鑑定`}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {evaluationResults && (
+                      <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                        <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2">
+                          <div>
+                            <h3 className="font-bold text-slate-700 text-lg">鑑定結果 ({evaluationResults.length}匹)</h3>
+                            <p className="text-[10px] text-slate-400">※{threshold}ランク以上を「キープ」と判定</p>
+                          </div>
+                          <button onClick={handleClearAll} className="text-sm font-bold text-orange-600 hover:bg-orange-50 px-3 py-1 rounded-full">新しく鑑定する</button>
+                        </div>
+
+                        <div className="space-y-3">
+                          {evaluationResults.map((res, idx) => {
+                            const isExpanded = expandedResults.has(idx);
+                            const isKeep = (RANK_VALUES[res.rank] || 0) >= RANK_VALUES[threshold];
+
+                            return (
+                              <div key={idx} className={`bg-white rounded-2xl shadow-sm border-2 overflow-hidden ${isKeep ? 'border-emerald-200' : 'border-slate-200 opacity-90'}`}>
+                                <div onClick={() => toggleResult(idx)} className={`flex items-center gap-3 p-3 cursor-pointer ${isKeep ? 'bg-emerald-50/30' : 'bg-slate-50'}`}>
+                                  <div className="relative flex-shrink-0">
+                                    <img src={selectedImages[idx]} className="w-14 h-14 rounded-lg object-cover border border-slate-200 shadow-sm" />
+                                    <div className="absolute -top-2 -left-2 w-5 h-5 bg-slate-800 text-white rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-white">{idx + 1}</div>
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                      <h3 className={`font-bold text-lg leading-none ${isKeep ? 'text-slate-800' : 'text-slate-600'}`}>{res.name}</h3>
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isKeep ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                                        {isKeep ? <Icon name="package-check" size={12}/> : <Icon name="archive-restore" size={12}/>}{isKeep ? 'キープ' : '博士へ'}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] font-bold text-slate-400">{res.specialty}</div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0 flex items-center gap-2">
+                                    <div className={`text-2xl font-black leading-none ${isKeep ? 'text-orange-500' : 'text-slate-400'}`}>{res.rank}</div>
+                                    <Icon name="chevron-down" className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} size={16} />
+                                  </div>
+                                </div>
+
+                                {isExpanded && (
+                                  <div className="p-4 space-y-4 border-t border-slate-100 bg-white">
+                                    <div className="bg-slate-800 text-white p-3 rounded-lg text-sm font-medium leading-relaxed flex gap-2">
+                                       <Icon name="star" size={18} className="text-amber-400 flex-shrink-0 mt-0.5"/><p>{res.conclusion}</p>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl">
+                                        <h4 className="font-bold text-emerald-800 flex items-center gap-1.5 mb-2 text-xs"><Icon name="check-circle-2" size={14} /> 評価ポイント</h4>
+                                        <ul className="space-y-1.5">{res.goodPoints.map((pt, i) => <li key={i} className="text-xs text-emerald-700 flex gap-1.5"><Icon name="arrow-right" size={12} className="mt-0.5 shrink-0 opacity-70" /> {pt}</li>)}</ul>
+                                      </div>
+                                      {res.badPoints && res.badPoints.length > 0 && (
+                                        <div className="bg-red-50 border border-red-100 p-3 rounded-xl">
+                                          <h4 className="font-bold text-red-800 flex items-center gap-1.5 mb-2 text-xs"><Icon name="alert-triangle" size={14} /> 妥協点・残念な点</h4>
+                                          <ul className="space-y-1.5">{res.badPoints.map((pt, i) => <li key={i} className="text-xs text-red-700 flex gap-1.5"><Icon name="arrow-right" size={12} className="mt-0.5 shrink-0 opacity-70" /> {pt}</li>)}</ul>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </main>
+
+              <nav className="fixed sm:absolute bottom-0 w-full sm:max-w-md bg-white border-t border-slate-200 flex justify-around items-center h-16 pb-safe z-20">
+                <button onClick={() => setActiveTab('party')} className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === 'party' ? 'text-orange-500' : 'text-slate-400'}`}>
+                  <Icon name="users" size={24} /><span className="text-[10px] font-bold">理想編成</span>
+                </button>
+                <button onClick={() => setActiveTab('evaluate')} className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === 'evaluate' ? 'text-orange-500' : 'text-slate-400'}`}>
+                  <Icon name="camera" size={24} /><span className="text-[10px] font-bold">一括鑑定</span>
+                </button>
+              </nav>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
+```
