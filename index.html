@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -70,7 +69,7 @@
             return <span ref={spanRef} className={`inline-flex items-center justify-center ${className}`}></span>;
         };
 
-        // --- 画像圧縮機能 (スマホのメモリ対策) ---
+        // --- 画像圧縮機能 ---
         const compressImage = (file) => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -78,7 +77,6 @@
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        // 最大サイズを800pxに制限
                         const maxSize = 800;
                         let width = img.width;
                         let height = img.height;
@@ -94,7 +92,6 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
                         
-                        // JPEG形式で少し圧縮して出力
                         resolve(canvas.toDataURL('image/jpeg', 0.8));
                     };
                     img.onerror = () => reject(new Error("画像の読み込みに失敗しました"));
@@ -106,11 +103,10 @@
         };
 
         // --- AI API Call Functions ---
-        // モデルが見つからないエラーを回避するため、複数のモデルを自動で試す機能
         async function callGeminiAPI(apiKey, payload) {
-            const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-latest'];
-            let lastError = null;
-
+            // 一番安定している標準モデルを優先して試す
+            const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+            
             for (const model of modelsToTry) {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
                 try {
@@ -122,26 +118,26 @@
                     
                     if (response.ok) {
                         return await response.json();
-                    } else {
-                        const errJson = await response.json().catch(() => ({}));
-                        lastError = new Error(errJson.error?.message || `APIエラー (${response.status})`);
-                        // NotFound (404) の場合のみ、エラーを無視して次のモデルを試す
-                        if (response.status === 404) {
-                            console.warn(`[PokeSapo] Model ${model} not found, trying next...`);
-                            continue;
-                        } else {
-                            throw lastError; // 400 Bad Request 等はそのままエラーにする
-                        }
                     }
+                    
+                    const errJson = await response.json().catch(() => ({}));
+                    const errorMessage = errJson.error?.message || `HTTP ${response.status}`;
+                    
+                    // モデルが見つからない (404) の場合のみ次を試す
+                    if (response.status === 404 || errorMessage.includes('not found')) {
+                        console.warn(`[PokeSapo] Model ${model} not found, trying next...`);
+                        continue;
+                    }
+                    
+                    // それ以外のエラー(400: 不正なリクエストなど)は即座にエラーとしてスローする
+                    throw new Error(`[${model}] ${errorMessage}`);
+                    
                 } catch (e) {
-                    lastError = e;
-                    // ネットワークエラー以外で404を含まないエラーならループを抜ける
-                    if (e.message && e.message.includes('APIエラー') && !e.message.includes('404')) {
-                        throw e;
-                    }
+                    // fetch自体のネットワークエラーなどは即スロー
+                    throw e;
                 }
             }
-            throw new Error(lastError?.message || "利用可能なAIモデルが見つかりませんでした");
+            throw new Error("利用可能なAIモデルが見つかりませんでした。APIキーを確認してください。");
         }
 
         async function generateIdealParty(apiKey, berries, mealType) {
@@ -159,9 +155,10 @@
                 type: "OBJECT",
                 properties: {
                   concept: { type: "STRING" },
-                  party: { type: "ARRAY", items: { type: "OBJECT", properties: { name: { type: "STRING" }, role: { type: "STRING" }, reason: { type: "STRING" } } } },
+                  party: { type: "ARRAY", items: { type: "OBJECT", properties: { name: { type: "STRING" }, role: { type: "STRING" }, reason: { type: "STRING" } }, required: ["name", "role", "reason"] } },
                   targetMeals: { type: "ARRAY", items: { type: "STRING" } }
-                }
+                },
+                required: ["concept", "party", "targetMeals"]
               }
             }
           };
@@ -186,38 +183,47 @@
             contents: [{ role: "user", parts: parts }],
             generationConfig: {
               responseMimeType: "application/json",
+              // エラーを防ぐため、一番外側を必ずOBJECTにする安全な構造に変更
               responseSchema: {
-                type: "ARRAY", items: { type: "OBJECT", properties: {
-                    name: { type: "STRING" }, specialty: { type: "STRING" }, rank: { type: "STRING" }, score: { type: "INTEGER" },
-                    goodPoints: { type: "ARRAY", items: { type: "STRING" } }, badPoints: { type: "ARRAY", items: { type: "STRING" } }, conclusion: { type: "STRING" }
-                  } }
+                type: "OBJECT", 
+                properties: {
+                  results: {
+                    type: "ARRAY", 
+                    items: { 
+                      type: "OBJECT", 
+                      properties: {
+                        name: { type: "STRING" }, specialty: { type: "STRING" }, rank: { type: "STRING" }, score: { type: "INTEGER" },
+                        goodPoints: { type: "ARRAY", items: { type: "STRING" } }, badPoints: { type: "ARRAY", items: { type: "STRING" } }, conclusion: { type: "STRING" }
+                      },
+                      required: ["name", "specialty", "rank", "score", "goodPoints", "badPoints", "conclusion"]
+                    }
+                  }
+                },
+                required: ["results"]
               }
             }
           };
 
           const result = await callGeminiAPI(apiKey, payload);
           const cleanText = result.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
-          return JSON.parse(cleanText);
+          const parsed = JSON.parse(cleanText);
+          return parsed.results || parsed;
         }
 
         function App() {
           const [activeTab, setActiveTab] = useState('evaluate'); 
           
-          // エラー通知用ステート
-          const [toastMsg, setToastMsg] = useState({ text: '', type: 'error' }); // type: 'error' | 'success'
+          const [toastMsg, setToastMsg] = useState({ text: '', type: 'error' });
 
-          // API Key State
           const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
           const [isKeySaved, setIsKeySaved] = useState(() => !!localStorage.getItem('gemini_api_key'));
           
-          // パーティ提案用ステート
           const [selectedField, setSelectedField] = useState('ワカクサ本島 (手動選択)');
           const [selectedBerries, setSelectedBerries] = useState([]);
           const [mealType, setMealType] = useState('カレー・シチュー');
           const [isGeneratingParty, setIsGeneratingParty] = useState(false);
           const [partyResult, setPartyResult] = useState(null);
 
-          // 評価用ステート
           const [selectedImages, setSelectedImages] = useState([]);
           const [isEvaluating, setIsEvaluating] = useState(false);
           const [evaluationResults, setEvaluationResults] = useState(null);
@@ -250,7 +256,7 @@
 
           const showToast = (text, type = 'error') => {
               setToastMsg({ text, type });
-              setTimeout(() => setToastMsg({ text: '', type: 'error' }), 5000); // 5秒で消す
+              setTimeout(() => setToastMsg({ text: '', type: 'error' }), 6000); 
           };
 
           const handleSaveKey = () => {
@@ -302,7 +308,6 @@
             if (files.length === 0) return;
             
             try {
-                // Canvasを使って画像をリサイズ＆圧縮
                 const compressedImages = await Promise.all(files.map(file => compressImage(file)));
                 setSelectedImages(prev => [...prev, ...compressedImages]);
                 setEvaluationResults(null); 
@@ -349,8 +354,8 @@
               {/* カスタムトースト (エラー通知) */}
               {toastMsg.text && (
                   <div className={`fixed top-16 left-1/2 -translate-x-1/2 w-11/12 max-w-sm px-4 py-3 rounded-xl shadow-2xl z-50 flex items-center justify-between transition-all ${toastMsg.type === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                      <span className="text-sm font-bold truncate pr-4">{toastMsg.text}</span>
-                      <button onClick={() => setToastMsg({text: '', type: 'error'})} className={`p-1 rounded-full ${toastMsg.type === 'error' ? 'hover:bg-red-700' : 'hover:bg-emerald-700'}`}><Icon name="x" size={16} /></button>
+                      <span className="text-sm font-bold pr-2 break-all line-clamp-3">{toastMsg.text}</span>
+                      <button onClick={() => setToastMsg({text: '', type: 'error'})} className={`p-1.5 rounded-full flex-shrink-0 ${toastMsg.type === 'error' ? 'hover:bg-red-700 bg-red-500' : 'hover:bg-emerald-700 bg-emerald-500'}`}><Icon name="x" size={16} /></button>
                   </div>
               )}
 
@@ -628,7 +633,4 @@
     </script>
 </body>
 </html>
-
-
-
 
