@@ -2,8 +2,9 @@
 
 画像と生成AIを利用したゲーム編成支援Webアプリです。
 
-## 統合先
+## 移転先
 
-個人開発ツールはポートフォリオへ集約しました。既存の公開URLは互換性のため残しています。
+開発元と公開先を `myportfolio` に統合しました。このリポジトリは旧URLの転送用です。
 
-https://kobasho-unihota.github.io/myportfolio/#apps
+- アプリ: https://kobasho-unihota.github.io/myportfolio/apps/poke-sapo/
+- ソース: https://github.com/kobasho-unihota/myportfolio/tree/main/apps/poke-sapo
